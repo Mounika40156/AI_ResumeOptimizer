@@ -5,14 +5,14 @@ require("dotenv").config();
 
 const analyzeRoute = require("./routes/analyze");
 const { extractText } = require("./utils/extractText");
-
+const resumeRoutes = require('./routes/resumeRoutes');
 const app = express();
 
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
-
+app.use('/api/resume', resumeRoutes);
 // Multer setup for file uploads
 const storage = multer.memoryStorage();
 const upload = multer({

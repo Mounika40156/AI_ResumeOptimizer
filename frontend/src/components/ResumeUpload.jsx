@@ -1,7 +1,19 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Upload, FileText, X, CheckCircle, AlertCircle, ArrowLeft, Loader } from "lucide-react";
+import {
+  Upload,
+  FileText,
+  X,
+  CheckCircle,
+  AlertCircle,
+  ArrowLeft,
+  Loader,
+} from "lucide-react";
+import { analyzeResume } from "../services/ResumeApi";
+import SkillOptions from "./SkillOptions";
+import AnalysisResults from "./AnalysisResults";
 
 const ResumeUpload = ({ onBack, onSuccess }) => {
+  // ===== STATE VARIABLES =====
   const [file, setFile] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -13,10 +25,20 @@ const ResumeUpload = ({ onBack, onSuccess }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState(null);
 
+  // NEW STATE VARIABLES FOR SKILL OPTIONS
+  const [showSkillOptions, setShowSkillOptions] = useState(false);
+  const [currentSkillAnalysis, setCurrentSkillAnalysis] = useState(null);
+  const [analysisResults, setAnalysisResults] = useState(null);
+  const [profileLevel, setProfileLevel] = useState("mid");
+  const [showAnalysisResults, setShowAnalysisResults] = useState(false);
+
   const fileInputRef = useRef(null);
 
   const MAX_FILE_SIZE = 5 * 1024 * 1024;
-  
+  const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5001";
+
+  // ===== FUNCTIONS =====
+
   // More flexible file type checking
   const validateFile = (file) => {
     if (file.size > MAX_FILE_SIZE) {
@@ -27,8 +49,10 @@ const ResumeUpload = ({ onBack, onSuccess }) => {
 
     // Check by file extension as well as MIME type
     const fileName = file.name.toLowerCase();
-    const validExtensions = ['.pdf', '.doc', '.docx'];
-    const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
+    const validExtensions = [".pdf", ".doc", ".docx"];
+    const hasValidExtension = validExtensions.some((ext) =>
+      fileName.endsWith(ext)
+    );
 
     const validMimeTypes = [
       "application/pdf",
@@ -46,8 +70,6 @@ const ResumeUpload = ({ onBack, onSuccess }) => {
 
     return true;
   };
-
-  const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -121,7 +143,9 @@ const ResumeUpload = ({ onBack, onSuccess }) => {
     setCharCount(e.target.value.length);
   };
 
-  // MAIN ANALYSIS FUNCTION - Calls Backend API
+  // ============================================================
+  // MAIN ANALYSIS FUNCTION - Calls Backend API with Resume + JD
+  // ============================================================
   const handleAnalyze = async () => {
     if (!file || !jobDescription.trim()) {
       setAnalysisError("Please provide both resume and job description");
@@ -157,15 +181,22 @@ const ResumeUpload = ({ onBack, onSuccess }) => {
       const result = await response.json();
       console.log("Analysis result:", result);
 
-      // Pass analysis results to parent component
-      if (onSuccess) {
-        onSuccess({
-          resumeFile: file,
-          jobDescription: jobDescription,
-          analysis: result.analysis,
-          resumeText: result.resumeText,
-        });
-      }
+      // ============================================================
+      // Extract skills and show SkillOptions
+      // ============================================================
+      // Always show SkillOptions with analysis results
+      setAnalysisResults({
+        resumeFile: file,
+        jobDescription: jobDescription,
+        analysis: result.analysis,
+        resumeText: result.resumeText,
+      });
+
+      // Set the analysis data (works with any structure)
+      setCurrentSkillAnalysis(result.analysis);
+      setShowSkillOptions(true);
+
+      console.log("✅ Showing SkillOptions with analysis:", result.analysis);
     } catch (error) {
       console.error("Analysis error:", error);
       setAnalysisError(
@@ -176,8 +207,45 @@ const ResumeUpload = ({ onBack, onSuccess }) => {
     }
   };
 
-  /* ========== JOB DESCRIPTION SCREEN ========== */
+  /* ========== ANALYSIS RESULTS SCREEN ========== */
+  if (showAnalysisResults && analysisResults) {
+    return (
+      <AnalysisResults
+        data={analysisResults}
+        onBack={() => {
+          setShowAnalysisResults(false);
+          setShowSkillOptions(true);
+        }}
+      />
+    );
+  }
 
+  /* ========== SKILL OPTIONS SCREEN ========== */
+  if (showSkillOptions && analysisResults) {
+    return (
+      <SkillOptions
+        file={file}
+        profileLevel={profileLevel}
+        skillAnalysis={analysisResults.analysis}
+        analysisResults={analysisResults}
+        onViewMissingSkills={() => {
+          setShowSkillOptions(false);
+          setShowAnalysisResults(true);
+        }}
+        onBack={() => {
+          setShowSkillOptions(false);
+          setCurrentSkillAnalysis(null);
+          setAnalysisResults(null);
+          setShowJD(false);
+          setJobDescription("");
+          setCharCount(0);
+          setUploadStatus(null);
+        }}
+      />
+    );
+  }
+
+  /* ========== JOB DESCRIPTION SCREEN ========== */
   if (showJD) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950 pt-24 pb-16">
@@ -255,7 +323,6 @@ const ResumeUpload = ({ onBack, onSuccess }) => {
   }
 
   /* ========== RESUME UPLOAD SCREEN ========== */
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950 pt-24 pb-16">
       <style>{`
@@ -458,13 +525,14 @@ const ResumeUpload = ({ onBack, onSuccess }) => {
 
             <div>
               <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
-                Resume Uploaded
+                Resume Uploaded Successfully
               </h2>
               <p className="text-slate-600 dark:text-slate-400 text-base">
-                Your resume is ready for analysis
+                Now let's add a job description to optimize your resume
               </p>
             </div>
 
+            {/* SINGLE BUTTON - Continue to Job Description */}
             <button
               onClick={() => setShowJD(true)}
               className="inline-block px-10 py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl"

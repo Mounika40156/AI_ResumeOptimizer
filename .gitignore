@@ -4,3 +4,4 @@ frontend/.env
 backend/.env
 build
 frontend/build
+uploads
